@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>আমার মজার মিডিয়া গ্যালারি</title>
+  <title>আমাদের সবার মজার মিডিয়া গ্যালারি</title>
   <style>
     :root {
       --bg: #0f172a; --card: #1e293b; --text: #f8fafc;
@@ -11,47 +11,47 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
-    .container { max-width: 800px; margin: 0 auto; }
+    .container { max-width: 900px; margin: 0 auto; }
     h1 { text-align: center; margin-bottom: 20px; font-size: 1.5rem; color: var(--primary); }
     .card { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     input, textarea, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #334155; background: #0b1120; color: #fff; font-size: 1rem; }
     button { background: var(--primary); border: none; font-weight: bold; cursor: pointer; }
     button:active { transform: scale(0.98); }
     .btn-danger { background: var(--danger); margin-top: 6px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 20px; }
     .media-card { background: var(--card); border-radius: 8px; overflow: hidden; padding: 10px; border: 1px solid #334155; }
-    img, video { width: 100%; height: 160px; object-fit: cover; border-radius: 6px; }
-    .title { font-weight: bold; font-size: 0.95rem; margin: 6px 0; word-break: break-word; }
+    img, video { width: 100%; height: 180px; object-fit: cover; border-radius: 6px; background: #000; }
+    .title { font-weight: bold; font-size: 0.95rem; margin: 8px 0; word-break: break-word; }
     .loader { text-align: center; color: #94a3b8; margin: 20px 0; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h1>আমার পার্সোনাল মিডিয়া গ্যালারি</h1>
+    <h1>আমাদের সবার মজার মিডিয়া গ্যালারি</h1>
 
-    <!-- আপলোড ফর্ম -->
+    <!-- সরাসরি আপলোড ফর্ম -->
     <div class="card">
-      <h3>নতুন ছবি বা ভিডিও যুক্ত করুন</h3>
+      <h3>যেকোনো ছবি বা ভিডিও আপলোড করুন</h3>
       <form id="uploadForm">
         <input type="text" id="mediaTitle" required placeholder="ফাইলের নাম বা শিরোনাম..." maxlength="60" />
         <input type="file" id="mediaFile" required accept="image/*,video/mp4" />
-        <button type="submit" id="submitBtn">গ্যালারিতে সেভ করুন</button>
+        <button type="submit" id="submitBtn">সরাসরি আপলোড করুন</button>
       </form>
     </div>
 
     <!-- গ্যালারি সেকশন -->
-    <h3>বন্ধুদের দেখানোর গ্যালারি</h3>
+    <h3>সবার আপলোড করা ছবি ও ভিডিও গ্যালারি</h3>
     <div id="loader" class="loader">মিডিয়া লোড হচ্ছে...</div>
     <div id="galleryGrid" class="grid"></div>
   </div>
 
-  <!-- Firebase ও প্রজেক্টের মূল লজিক -->
+  <!-- Firebase ও Cloudinary মূল লজিক -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // আপনার দেওয়া ফায়ারবেস কনফিগারেশন এখানে অটো-সেট করা আছে
+    // আপনার ফায়ারবেস কনফিগারেশন
     const firebaseConfig = {
       apiKey: "AIzaSyBQ23-YFHEd2iutbcV8id5U-SwYVtwNdiI",
       authDomain: "my-media-gallery-e2fb9.firebaseapp.com",
@@ -61,6 +61,10 @@
       appId: "1:714937072251:web:11e7e2afda18db152300de"
     };
 
+    // ক্লাউডিনারি সেটিংস (আপনার ক্লাউড নাম এখানে সেট করা আছে)
+    const CLOUDINARY_CLOUD_NAME = "emoxfdx6"; // <-- আপনার ক্লাউড নেম এখানে বসিয়ে দিন
+    const CLOUDINARY_PRESET = "ml_default";
+
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
@@ -69,52 +73,61 @@
     const loader = document.getElementById("loader");
     const submitBtn = document.getElementById("submitBtn");
 
-    function readFileAsDataURL(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-      });
-    }
-
+    // ফর্ম সাবমিট ও ক্লাউডিনারিতে আপলোড হ্যান্ডলার
     uploadForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const title = document.getElementById("mediaTitle").value.trim();
       const fileInput = document.getElementById("mediaFile");
       const file = fileInput.files[0];
 
-      if (!file) return alert("ফাইল সিলেক্ট করুন!");
-      if (file.size > 10 * 1024 * 1024) {
-        return alert("ফাইল সাইজ ১০ MB এর কম হতে হবে!");
-      }
+      if (!file) return alert("দয়া করে একটি ফাইল সিলেক্ট করুন!");
 
       try {
         submitBtn.disabled = true;
-        submitBtn.textContent = "আপলোড হচ্ছে, অপেক্ষা করুন...";
-        
-        const base64Url = await readFileAsDataURL(file);
-        const isVideo = file.type.startsWith("video");
+        submitBtn.textContent = "আপলোড হচ্ছে, একটু অপেক্ষা করুন...";
 
+        // ১. ফাইল টাইপ চেক (ইমেজ নাকি ভিডিও)
+        const isVideo = file.type.startsWith("video");
+        const resourceType = isVideo ? "video" : "image";
+
+        // ২. ক্লাউডিনারিতে ফাইল পাঠানো
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", CLOUDINARY_PRESET);
+
+        const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`;
+        
+        const res = await fetch(cloudinaryUrl, {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+        if (!data.secure_url) {
+          throw new Error(data.error?.message || "ক্লাউডিনারিতে আপলোড ব্যর্থ হয়েছে।");
+        }
+
+        // ৩. সফলভাবে আপলোড হওয়ার পর ফায়ারবেস ডাটাবেসে লিংক ও টাইটেল সেভ করা
         await addDoc(collection(db, "media"), {
           title: title,
-          url: base64Url,
+          url: data.secure_url,
           type: isVideo ? "video" : "image",
           createdAt: serverTimestamp()
         });
 
-        alert("সফলভাবে গ্যালারিতে সেভ হয়েছে!");
+        alert("সফলভাবে আপলোড হয়ে গ্যালারিতে যোগ হয়েছে!");
         uploadForm.reset();
         loadGallery();
       } catch (err) {
         console.error(err);
-        alert("আপলোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+        alert("আপলোড করতে সমস্যা হয়েছে: " + err.message);
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = "গ্যালারিতে সেভ করুন";
+        submitBtn.textContent = "সরাসরি আপলোড করুন";
       }
     });
 
+    // গ্যালারি লোড করা (সবাই সবারটা দেখতে পাবে)
     async function loadGallery() {
       try {
         loader.style.display = "block";
@@ -124,7 +137,7 @@
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-          galleryGrid.innerHTML = `<p style="color:#94a3b8">এখনো কোনো ফাইল নেই।</p>`;
+          galleryGrid.innerHTML = `<p style="color:#94a3b8">এখনো কোনো মিডিয়া নেই।</p>`;
           loader.style.display = "none";
           return;
         }
@@ -155,7 +168,7 @@
     }
 
     window.deleteItem = async (id) => {
-      if (confirm("সত্যিই ফাইলটি মুছে ফেলতে চান?")) {
+      if (confirm("সত্যিই এই ফাইলটি মুছে ফেলতে চান?")) {
         try {
           await deleteDoc(doc(db, "media", id));
           loadGallery();
@@ -168,5 +181,5 @@
     loadGallery();
   </script>
 </body>
-  </html>
+      </html>
   
